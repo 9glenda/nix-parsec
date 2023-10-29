@@ -36,6 +36,7 @@ in ...
 ```
 
 If you are using Nix Flakes, you can add `nix-parsec` as an input:
+
 ```nix
 {
   inputs = {
@@ -55,4 +56,3 @@ At the top level, two attribute sets are exported:
 
 The parsing/lexing APIs roughly correspond to those of Haskell's `megaparsec`
 library. See `examples/` for some example parsers.
-
