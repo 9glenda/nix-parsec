@@ -10,27 +10,22 @@
 # singleton list containing a value of type 'a'. 'NonEmpty a' denotes a list
 # containing one or more values of type 'a'. 'null' denotes the singleton type
 # containing only the value 'null'.
-
 with builtins;
-
 with rec {
   # Redefinitions to avoid depending on lib
 
-  foldr = op: nul: list:
-    let
-      len = length list;
-      fold' = n:
-        if n == len
-        then nul
-        else op (elemAt list n) (fold' (n + 1));
-    in fold' 0;
+  foldr = op: nul: list: let
+    len = length list;
+    fold' = n:
+      if n == len
+      then nul
+      else op (elemAt list n) (fold' (n + 1));
+  in
+    fold' 0;
 
   # TODO: optimize result collection
-  reverseList = xs:
-    let l = length xs; in genList (n: elemAt xs (l - n - 1)) l;
-};
-
-rec {
+  reverseList = xs: let l = length xs; in genList (n: elemAt xs (l - n - 1)) l;
+}; rec {
   # running {{{
 
   # Run a parser, returning the result in an attrset either containing a "type"
@@ -42,11 +37,18 @@ rec {
   # you want to make sure all input has been consume, use 'eof'.
   #
   #   :: Parser a -> String -> Either e a
-  runParser = parser: str:
-    let res = parser [str 0 (stringLength str)];
-    in if failed res
-      then { type = "error"; value = res; }
-      else { type = "success"; value = elemAt res 0; };
+  runParser = parser: str: let
+    res = parser [str 0 (stringLength str)];
+  in
+    if failed res
+    then {
+      type = "error";
+      value = res;
+    }
+    else {
+      type = "success";
+      value = elemAt res 0;
+    };
 
   # }}}
 
@@ -59,40 +61,39 @@ rec {
 
   # Query the current state of the parser
   #   :: Parser (String, Int, Int)
-  state = ps:
-    let
-      offset = elemAt ps 1;
-      len = elemAt ps 2;
-    in [ps offset len];
+  state = ps: let
+    offset = elemAt ps 1;
+    len = elemAt ps 2;
+  in [ps offset len];
 
   # Augment a parser to also return the number of characters it consumed
   #   :: Parser a -> Parser (Int, a)
-  measure = parser: ps:
-    let
-      initialOffset = elemAt ps 1;
-      res = parser ps;
-    in if failed res
-      then res
-      else let
-        value = elemAt res 0;
-        newOffset = elemAt res 1;
-        newLength = elemAt res 2;
-      in [[(newOffset - initialOffset) value] newOffset newLength];
+  measure = parser: ps: let
+    initialOffset = elemAt ps 1;
+    res = parser ps;
+  in
+    if failed res
+    then res
+    else let
+      value = elemAt res 0;
+      newOffset = elemAt res 1;
+      newLength = elemAt res 2;
+    in [[(newOffset - initialOffset) value] newOffset newLength];
 
   # Augment a parser to also return the characters it consumed
   #   :: Parser a -> Parser (String, a)
-  withMatch = parser: ps:
-    let
-      str = elemAt ps 0;
-      oldOffset = elemAt ps 1;
-      res = parser ps;
-    in if failed res
-      then res
-      else let
-        value = elemAt res 0;
-        newOffset = elemAt res 1;
-        newLen = elemAt res 2;
-      in [[(substring oldOffset (newOffset - oldOffset) str) value] newOffset newLen];
+  withMatch = parser: ps: let
+    str = elemAt ps 0;
+    oldOffset = elemAt ps 1;
+    res = parser ps;
+  in
+    if failed res
+    then res
+    else let
+      value = elemAt res 0;
+      newOffset = elemAt res 1;
+      newLen = elemAt res 2;
+    in [[(substring oldOffset (newOffset - oldOffset) str) value] newOffset newLen];
 
   # }}}
 
@@ -100,15 +101,15 @@ rec {
 
   # Map a function over the result of a parser
   #   :: (a -> b) -> Parser a -> Parser b
-  fmap = f: parser: ps:
-    let
-      res = parser ps;
-      val = elemAt res 0;
-      offset = elemAt res 1;
-      len = elemAt res 2;
-    in if failed res
-      then res
-      else [(f val) offset len];
+  fmap = f: parser: ps: let
+    res = parser ps;
+    val = elemAt res 0;
+    offset = elemAt res 1;
+    len = elemAt res 2;
+  in
+    if failed res
+    then res
+    else [(f val) offset len];
 
   # Lift a value into a parser
   #   :: a -> Parser a
@@ -124,17 +125,18 @@ rec {
 
   # Monadic bind; sequence two parsers together
   #   :: Parser a -> (a -> Parser b) -> Parser b
-  bind = parser: f: ps:
-    let
-      str = elemAt ps 0;
-      res1 = parser ps;
-    in if failed res1
-      then res1
-      else let
-        val = elemAt res1 0;
-        offset = elemAt res1 1;
-        len = elemAt res1 2;
-      in (f val) [str offset len];
+  bind = parser: f: ps: let
+    str = elemAt ps 0;
+    res1 = parser ps;
+  in
+    if failed res1
+    then res1
+    else let
+      val = elemAt res1 0;
+      offset = elemAt res1 1;
+      len = elemAt res1 2;
+    in
+      (f val) [str offset len];
 
   # Sequence two parsers, ignoring the result of the first one, like '*>' in
   # Haskell
@@ -148,14 +150,14 @@ rec {
 
   # Run a list of parsers in sequence, collecting their results
   #   :: [Parser a] -> Parser [a]
-  sequence = xs:
-    let
-      len = length xs;
-      go = n:
-        if n >= len
-          then pure []
-          else bind (elemAt xs n) (first: fmap (rest: [first] ++ rest) (go (n + 1)));
-    in go 0;
+  sequence = xs: let
+    len = length xs;
+    go = n:
+      if n >= len
+      then pure []
+      else bind (elemAt xs n) (first: fmap (rest: [first] ++ rest) (go (n + 1)));
+  in
+    go 0;
 
   # Ignore the results of a parser
   #   :: Parser a -> Parser null
@@ -163,32 +165,33 @@ rec {
 
   # Like 'sequence', but ignore the outputs of the parsers
   #   :: [Parser a] -> Parser null
-  sequence_ = xs:
-    let
-      len = length xs;
-      go = n:
-        if n >= len
-          then pure null
-          else skipThen (elemAt xs n) (go (n + 1));
-    in go 0;
+  sequence_ = xs: let
+    len = length xs;
+    go = n:
+      if n >= len
+      then pure null
+      else skipThen (elemAt xs n) (go (n + 1));
+  in
+    go 0;
 
   # }}}
 
   # options and failure {{{
 
   # Parser that always fails (the identity under 'alt')
-  fail = failWith { context = "parsec.fail"; };
+  fail = failWith {context = "parsec.fail";};
 
   # Parser that always fails with the given error
   #   :: e -> Parser a
   failWith = e: _: e;
 
   # Apply a function to modify an error message for a parser
-  annotate = f: parser: ps:
-    let res = parser ps;
-    in if failed res
-      then f res
-      else res;
+  annotate = f: parser: ps: let
+    res = parser ps;
+  in
+    if failed res
+    then f res
+    else res;
 
   # Modify a parser error message by adding the given attributes
   #
@@ -197,34 +200,44 @@ rec {
   annotateWith = e: annotate (x: x // e);
 
   # Add a new context annotation to an error, keeping the old error entirely
-  annotateContext = s: annotate (e: { context = s; error = e; });
+  annotateContext = s:
+    annotate (e: {
+      context = s;
+      error = e;
+    });
 
   # Add information about the current offset to a parser
   #
   # NOTE: this overrides any old offset info, which could make it confusing
   # where the error actually happened.
   withOffsetInfo = parser:
-    bind state (info: annotateWith { str = elemAt info 0; offset = elemAt info 1; } parser);
+    bind state (info:
+      annotateWith {
+        str = elemAt info 0;
+        offset = elemAt info 1;
+      }
+      parser);
 
   # Override an error message for a parser
   label = e: annotate (_: e);
 
   # Run two parsers; if the first one fails, run the second one
   #   :: Parser a -> Parser a -> Parser a
-  alt = parser1: parser2: withOffsetInfo (ps:
-    let
-      str = elemAt ps 0;
-      res1 = parser1 ps;
-      res2 = parser2 ps;
-    in if failed res1
-      then if failed res2
-        then {
-          context = "parsec.alt";
-          msg = "expected one of these to succeed";
-          error = [res1 res2];
-        }
-        else res2
-      else res1);
+  alt = parser1: parser2: withOffsetInfo (ps: let
+    str = elemAt ps 0;
+    res1 = parser1 ps;
+    res2 = parser2 ps;
+  in
+    if failed res1
+    then
+      if failed res2
+      then {
+        context = "parsec.alt";
+        msg = "expected one of these to succeed";
+        error = [res1 res2];
+      }
+      else res2
+    else res1);
 
   # Try to apply a parser, or return a default value if it fails without
   # consuming input. Cannot fail.
@@ -239,17 +252,23 @@ rec {
 
   # Run a list of parsers, using the first one that succeeds
   #   :: [Parser a] -> Parser a
-  choice = parsers: withOffsetInfo (ps:
-    let
-      results = map (p: p ps) parsers;
-      firstSuccess = foldr (x: rest: if failed x then rest else x) null results;
-    in if firstSuccess == null
-      then {
-        context = "parsec.choice";
-        msg = "expected one of these to be satisfied";
-        error = results;
-      }
-      else firstSuccess);
+  choice = parsers: withOffsetInfo (ps: let
+    results = map (p: p ps) parsers;
+    firstSuccess =
+      foldr (x: rest:
+        if failed x
+        then rest
+        else x)
+      null
+      results;
+  in
+    if firstSuccess == null
+    then {
+      context = "parsec.choice";
+      msg = "expected one of these to be satisfied";
+      error = results;
+    }
+    else firstSuccess);
 
   # }}}
 
@@ -257,28 +276,28 @@ rec {
 
   # Consumes a character if it satisfies a predicate
   #   :: (Char -> Bool) -> Parser Char
-  satisfy = pred: withOffsetInfo (ps:
-    let
-      str = elemAt ps 0;
-      offset = elemAt ps 1;
-      len = elemAt ps 2;
-      c = substring offset 1 str; # the next character
-    in if len > 0 && pred c
-      then [c (offset + 1) (len - 1)]
-      else { context = "parsec.satisfy"; });
+  satisfy = pred: withOffsetInfo (ps: let
+    str = elemAt ps 0;
+    offset = elemAt ps 1;
+    len = elemAt ps 2;
+    c = substring offset 1 str; # the next character
+  in
+    if len > 0 && pred c
+    then [c (offset + 1) (len - 1)]
+    else {context = "parsec.satisfy";});
 
   # Consumes a character if it satisfies a predicate, applying a function to the
   # result.
   #   :: (Char -> a) -> (Char -> Bool) -> Parser a
-  satisfyWith = f: pred: withOffsetInfo (ps:
-    let
-      str = elemAt ps 0;
-      offset = elemAt ps 1;
-      len = elemAt ps 2;
-      c = substring offset 1 str; # the next character
-    in if len > 0 && pred c
-      then [(f c) (offset + 1) (len - 1)]
-      else { context = "parsec.satisfyWith"; });
+  satisfyWith = f: pred: withOffsetInfo (ps: let
+    str = elemAt ps 0;
+    offset = elemAt ps 1;
+    len = elemAt ps 2;
+    c = substring offset 1 str; # the next character
+  in
+    if len > 0 && pred c
+    then [(f c) (offset + 1) (len - 1)]
+    else {context = "parsec.satisfyWith";});
 
   # Consume any character
   #   :: Parser Char
@@ -288,57 +307,57 @@ rec {
 
   # Consume any character except a given character
   #   :: Char -> Parser Char
-  anyCharBut = c: withOffsetInfo (annotateWith {
-    context = "parsec.anyCharBut";
-    error = "expected any char except ${c}";
-  } (satisfy (x: x != c)));
+  anyCharBut = c:
+    withOffsetInfo (annotateWith {
+      context = "parsec.anyCharBut";
+      error = "expected any char except ${c}";
+    } (satisfy (x: x != c)));
 
   # Given a string, try to consume it from the input and return it if it
   # succeeds. If it fails, DON'T consume any input.
   #   :: String -> Parser String
-  string = pr: withOffsetInfo (ps:
-    let
-      prefixLen = stringLength pr;
-      str = elemAt ps 0;
-      offset = elemAt ps 1;
-      len = elemAt ps 2;
-    in if len >= prefixLen && substring offset prefixLen str == pr
-      then [pr (offset + prefixLen) (len - prefixLen)]
-      else {
-        context = "parsec.string";
-        msg = "expected string '${pr}'";
-      });
+  string = pr: withOffsetInfo (ps: let
+    prefixLen = stringLength pr;
+    str = elemAt ps 0;
+    offset = elemAt ps 1;
+    len = elemAt ps 2;
+  in
+    if len >= prefixLen && substring offset prefixLen str == pr
+    then [pr (offset + prefixLen) (len - prefixLen)]
+    else {
+      context = "parsec.string";
+      msg = "expected string '${pr}'";
+    });
 
   # 'notFollowedBy p' only succeeds when 'p' fails, and never consumes any input
   #   :: Parser a -> Parser null
-  notFollowedBy = parser: withOffsetInfo (ps:
-    let
-      offset = elemAt ps 1;
-      len = elemAt ps 2;
-    in if failed (parser ps)
-      then [null offset len]
-      else { context = "parsec.notFollowedBy"; });
+  notFollowedBy = parser: withOffsetInfo (ps: let
+    offset = elemAt ps 1;
+    len = elemAt ps 2;
+  in
+    if failed (parser ps)
+    then [null offset len]
+    else {context = "parsec.notFollowedBy";});
 
   # Fails if there is still more input remaining, returns null otherwise
   #   :: Parser null
-  eof = withOffsetInfo (ps:
-    let
-      offset = elemAt ps 1;
-      len = elemAt ps 2;
-    in if len == 0
-      then [null offset len]
-      else {
-        context = "parsec.eof";
-        msg = "expected end of input";
-      });
+  eof = withOffsetInfo (ps: let
+    offset = elemAt ps 1;
+    len = elemAt ps 2;
+  in
+    if len == 0
+    then [null offset len]
+    else {
+      context = "parsec.eof";
+      msg = "expected end of input";
+    });
 
   # Return whether or not we're at the end of the input. Cannot fail.
   #   :: Parser Bool
-  atEnd = ps:
-    let
-      offset = elemAt ps 1;
-      len = elemAt ps 2;
-    in [(len == 0) offset len];
+  atEnd = ps: let
+    offset = elemAt ps 1;
+    len = elemAt ps 2;
+  in [(len == 0) offset len];
 
   # }}}
 
@@ -346,95 +365,106 @@ rec {
 
   # Repeat a parser 'n' times, returning the results from each parse
   #   :: Int -> Parser a -> Parser [a]
-  count = n: assert n >= 0; parser:
-    let p' =
-      let go = m: if m == 0
+  count = n: assert n >= 0; parser: let
+    p' = let
+      go = m:
+        if m == 0
         then pure []
         else bind parser (first: fmap (rest: [first] ++ rest) (go (m - 1)));
-      in go n;
-    in annotate (e: {
+    in
+      go n;
+  in
+    annotate (e: {
       context = "parsec.count";
       msg = "expected ${toString n} occurrances";
       error = e;
-    }) p';
+    })
+    p';
 
   # Consume 'n' characters, or fail if there's not enough characters left.
   # Return the characters consumed.
   #   :: Int -> Parser String
-  take = n: assert n >= 0; withOffsetInfo (ps:
-    let
-      str = elemAt ps 0;
-      offset = elemAt ps 1;
-      len = elemAt ps 2;
-    in if n <= len
-      then [(substring offset n str) (offset + n) (len - n)]
-      else {
-        context = "parsec.take";
-        error = "expected ${toString n} characters, but only got ${toString len}";
-      });
+  take = n: assert n >= 0; withOffsetInfo (ps: let
+    str = elemAt ps 0;
+    offset = elemAt ps 1;
+    len = elemAt ps 2;
+  in
+    if n <= len
+    then [(substring offset n str) (offset + n) (len - n)]
+    else {
+      context = "parsec.take";
+      error = "expected ${toString n} characters, but only got ${toString len}";
+    });
 
   # Consume zero or more characters while the predicate holds, returning the
   # consumed characters. Cannot fail.
   #   :: (Char -> Bool) -> Parser String
-  takeWhile = pred: ps:
-    let
-      str = elemAt ps 0;
-      offset = elemAt ps 1;
-      len = elemAt ps 2;
-      strLen = stringLength str;
-      # Search for the next offset that violates the predicate
-      go = ix:
-        if ix >= strLen || !pred (substring ix 1 str)
-          then ix
-          else go (ix + 1);
-      endIx = go offset;
-      # The number of characters we found
-      numChars = endIx - offset;
-    in [(substring offset numChars str) endIx (len - numChars)];
+  takeWhile = pred: ps: let
+    str = elemAt ps 0;
+    offset = elemAt ps 1;
+    len = elemAt ps 2;
+    strLen = stringLength str;
+    # Search for the next offset that violates the predicate
+    go = ix:
+      if ix >= strLen || !pred (substring ix 1 str)
+      then ix
+      else go (ix + 1);
+    endIx = go offset;
+    # The number of characters we found
+    numChars = endIx - offset;
+  in [(substring offset numChars str) endIx (len - numChars)];
 
   # Consume one or more characters while the predicate holds, returning the
   # consumed characters.
   #   :: (Char -> Bool) -> Parser String
-  takeWhile1 = pred:
-    let p' = bind (satisfy pred) (first: fmap (rest: first + rest) (takeWhile pred));
-    in annotateWith {
+  takeWhile1 = pred: let
+    p' = bind (satisfy pred) (first: fmap (rest: first + rest) (takeWhile pred));
+  in
+    annotateWith {
       context = "parsec.takeWhile1";
       msg = "expected at least one character matching the predicate";
-    } p';
+    }
+    p';
 
   # Apply a parser zero or more times until it fails, returning a list of the
   # results. Cannot fail.
   #   :: Parser a -> Parser [a]
-  many = parser:
-    let go = alt (bind parser (first: fmap (rest: [first] ++ rest) go)) (pure []);
-    in go;
+  many = parser: let
+    go = alt (bind parser (first: fmap (rest: [first] ++ rest) go)) (pure []);
+  in
+    go;
 
   # Apply a parser one or more times until it fails, returning a list of the
   # results
   #   :: Parser a -> Parser (NonEmpty a)
-  many1 = parser:
-    let p' = bind parser (first: fmap (rest: [first] ++ rest) (many parser));
-    in annotate (e: {
+  many1 = parser: let
+    p' = bind parser (first: fmap (rest: [first] ++ rest) (many parser));
+  in
+    annotate (e: {
       context = "parsec.many1";
       msg = "expected one or more occurrences";
       error = e;
-    }) p';
+    })
+    p';
 
   # Repeat a parser zero or more times until the end parser succeeds. Returns a
   # list of the results of the first parser.
   #   :: Parser a -> Parser b -> Parser [a]
-  manyTill = parser: end:
-    let p' =
-      let go = alt (fmap (_: []) end) (bind parser (first: fmap (rest: [first] ++ rest) go));
-      in go;
-    in annotateContext "parsec.manyTill" p';
+  manyTill = parser: end: let
+    p' = let
+      go = alt (fmap (_: []) end) (bind parser (first: fmap (rest: [first] ++ rest) go));
+    in
+      go;
+  in
+    annotateContext "parsec.manyTill" p';
 
   # Repeat a parser one or more times until the end parser succeeds. Returns a
   # list of the results of the first parser.
   #   :: Parser a -> Parser b -> Parser (NonEmpty a)
-  manyTill1 = parser: end:
-    let p' = bind parser (first: fmap (rest: [first] ++ rest) (manyTill parser end));
-    in annotateContext "parsec.manyTill1" p';
+  manyTill1 = parser: end: let
+    p' = bind parser (first: fmap (rest: [first] ++ rest) (manyTill parser end));
+  in
+    annotateContext "parsec.manyTill1" p';
 
   # }}}
 
@@ -456,9 +486,10 @@ rec {
   # Parse one or more occurrences of the first parser, separated by the second
   # parser. Returns a list of results of the first parser.
   #   :: Parser a -> Parser b -> Parser (NonEmpty a)
-  sepBy1 = parser: end:
-    let p' = bind parser (first: fmap (rest: [first] ++ rest) (many (skipThen end parser)));
-    in annotateContext "parsec.sepBy1" p';
+  sepBy1 = parser: end: let
+    p' = bind parser (first: fmap (rest: [first] ++ rest) (many (skipThen end parser)));
+  in
+    annotateContext "parsec.sepBy1" p';
 
   # Parse zero or more occurrences of the first parser, separated and ended by
   # the second parser. Returns a list of results of the first parser. Cannot
@@ -470,9 +501,10 @@ rec {
   # Parse one or more occurrences of the first parser, separated and ended by
   # the second parser. Returns a list of results of the first parser.
   #   :: Parser a -> Parser b -> Parser (NonEmpty a)
-  endBy1 = parser: end:
-    let p' = many1 (thenSkip parser end);
-    in annotateContext "parsec.endBy1" p';
+  endBy1 = parser: end: let
+    p' = many1 (thenSkip parser end);
+  in
+    annotateContext "parsec.endBy1" p';
 
   # Parse zero or more occurrences of the first parser, separated and optionally
   # ended by the second parser. Returns a list of result of the first parser.
@@ -484,16 +516,18 @@ rec {
   # Parse one or more occurrences of the first parser, separated and optionally
   # ended by the second parser. Returns a list of result of the first parser.
   #   :: Parser a -> Parser b -> Parser (NonEmpty a)
-  sepEndBy1 = parser: end:
-    let p' =
-      let
-        go = alt
-          (skipThen end (alt
-            (bind parser (first: fmap (rest: [first] ++ rest) go))
-            (pure [])))
-          (pure []);
-      in bind parser (first: fmap (rest: [first] ++ rest) go);
-    in annotateContext "parsec.sepEndBy1" p';
+  sepEndBy1 = parser: end: let
+    p' = let
+      go =
+        alt
+        (skipThen end (alt
+          (bind parser (first: fmap (rest: [first] ++ rest) go))
+          (pure [])))
+        (pure []);
+    in
+      bind parser (first: fmap (rest: [first] ++ rest) go);
+  in
+    annotateContext "parsec.sepEndBy1" p';
 
   # }}}
 
@@ -501,71 +535,76 @@ rec {
 
   # Consume 'n' characters, or fail if there's not enough characters left.
   #   :: Int -> Parser null
-  skip = n: assert n >= 0; ps:
-    let
-      str = elemAt ps 0;
-      offset = elemAt ps 1;
-      len = elemAt ps 2;
-    in if n <= len
-      then [null (offset + n) (len - n)]
-      else {
-        context = "parsec.skip";
-        error = "expected ${toString n} characters, but only got ${toString len}";
-      };
+  skip = n: assert n >= 0; ps: let
+    str = elemAt ps 0;
+    offset = elemAt ps 1;
+    len = elemAt ps 2;
+  in
+    if n <= len
+    then [null (offset + n) (len - n)]
+    else {
+      context = "parsec.skip";
+      error = "expected ${toString n} characters, but only got ${toString len}";
+    };
 
   # Consume zero or more characters while the predicate holds. Cannot fail.
   #   :: (Char -> Bool) -> Parser null
-  skipWhile = pred: ps:
-    let
-      str = elemAt ps 0;
-      offset = elemAt ps 1;
-      len = elemAt ps 2;
-      strLen = stringLength str;
-      # Search for the next offset that violates the predicate
-      go = ix:
-        if ix >= strLen || !pred (substring ix 1 str)
-          then ix
-          else go (ix + 1);
-      endIx = go offset;
-      # The number of characters we found
-      numChars = endIx - offset;
-    in [null endIx (len - numChars)];
+  skipWhile = pred: ps: let
+    str = elemAt ps 0;
+    offset = elemAt ps 1;
+    len = elemAt ps 2;
+    strLen = stringLength str;
+    # Search for the next offset that violates the predicate
+    go = ix:
+      if ix >= strLen || !pred (substring ix 1 str)
+      then ix
+      else go (ix + 1);
+    endIx = go offset;
+    # The number of characters we found
+    numChars = endIx - offset;
+  in [null endIx (len - numChars)];
 
   # Consume one or more characters while the predicate holds.
   #   :: (Char -> Bool) -> Parser null
-  skipWhile1 = pred:
-    let p' = skipThen (satisfy pred) (skipWhile pred);
-    in annotateContext "parsec.skipWhile1" p';
+  skipWhile1 = pred: let
+    p' = skipThen (satisfy pred) (skipWhile pred);
+  in
+    annotateContext "parsec.skipWhile1" p';
 
   # Run a parser zero or more times until it fails, discarding all the input
   # that it accepts. Cannot fail.
   #   :: Parser a -> Parser null
-  skipMany = parser:
-    let go = alt (skipThen parser go) (pure null);
-    in go;
+  skipMany = parser: let
+    go = alt (skipThen parser go) (pure null);
+  in
+    go;
 
   # Run a parser one or more times until it fails, discarding all the input that
   # it accepts.
   #   :: Parser a -> Parser null
-  skipMany1 = parser:
-    let p' = skipThen parser (skipMany parser);
-    in annotateContext "parsec.skipMany1" p';
+  skipMany1 = parser: let
+    p' = skipThen parser (skipMany parser);
+  in
+    annotateContext "parsec.skipMany1" p';
 
   # Repeat a parser zero or more times until the end parser succeeds. Discards
   # consumed input.
   #   :: Parser a -> Parser b -> Parser null
-  skipTill = parser: end:
-    let p' =
-      let go = alt end (skipThen parser go);
-      in void go;
-    in annotateContext "parsec.skipTill" p';
+  skipTill = parser: end: let
+    p' = let
+      go = alt end (skipThen parser go);
+    in
+      void go;
+  in
+    annotateContext "parsec.skipTill" p';
 
   # Repeat a parser one or more times until the end parser succeeds. Discards
   # consumed input.
   #   :: Parser a -> Parser b -> Parser null
-  skipTill1 = parser: end:
-    let p' = skipThen parser (skipTill parser end);
-    in annotateContext "parsec.skipTill1" p';
+  skipTill1 = parser: end: let
+    p' = skipThen parser (skipTill parser end);
+  in
+    annotateContext "parsec.skipTill1" p';
 
   # }}}
 
@@ -574,17 +613,17 @@ rec {
   # Examine the next character without consuming it. Fails if there's no input
   # left.
   #   :: Parser Char
-  peek = ps:
-    let
-      str = elemAt ps 0;
-      offset = elemAt ps 1;
-      len = elemAt ps 2;
-    in if len > 0
-      then [(substring offset 1 str) offset len]
-      else {
-        context = "parsec.peek";
-        msg = "expected a character";
-      };
+  peek = ps: let
+    str = elemAt ps 0;
+    offset = elemAt ps 1;
+    len = elemAt ps 2;
+  in
+    if len > 0
+    then [(substring offset 1 str) offset len]
+    else {
+      context = "parsec.peek";
+      msg = "expected a character";
+    };
 
   # Examine the rest of the input without consuming it. Cannot fail.
   #
@@ -592,12 +631,11 @@ rec {
   # caution.
   #
   #   :: Parser String
-  peekRest = ps:
-    let
-      str = elemAt ps 0;
-      offset = elemAt ps 1;
-      len = elemAt ps 2;
-    in [(substring offset len str) offset len];
+  peekRest = ps: let
+    str = elemAt ps 0;
+    offset = elemAt ps 1;
+    len = elemAt ps 2;
+  in [(substring offset len str) offset len];
 
   # Consume and return the rest of the input. Cannot fail.
   #
@@ -605,20 +643,18 @@ rec {
   # caution.
   #
   #   :: Parser String
-  consumeRest = ps:
-    let
-      str = elemAt ps 0;
-      offset = elemAt ps 1;
-      len = elemAt ps 2;
-    in [(substring offset len str) (offset + len) 0];
+  consumeRest = ps: let
+    str = elemAt ps 0;
+    offset = elemAt ps 1;
+    len = elemAt ps 2;
+  in [(substring offset len str) (offset + len) 0];
 
   # Consume and ignore the rest of the input. Cannot fail.
   #   :: Parser null
-  dropRest = ps:
-    let
-      offset = elemAt ps 1;
-      len = elemAt ps 2;
-    in [null (offset + len) 0];
+  dropRest = ps: let
+    offset = elemAt ps 1;
+    len = elemAt ps 2;
+  in [null (offset + len) 0];
 
   # }}}
 
@@ -632,31 +668,32 @@ rec {
   # number of characters you may need, use "matchingN".
   #
   #   :: String -> Parser (NonEmpty String)
-  matching = regex: annotateContext "parsec.matching" (ps:
-    let len = elemAt ps 2;
-    in matchingN len regex ps);
+  matching = regex: annotateContext "parsec.matching" (ps: let
+    len = elemAt ps 2;
+  in
+    matchingN len regex ps);
 
   # Given a regex that matches a string, consume at most 'n' characters from the
   # input matching the regular expression. Return the matched text, followed by
   # any capture groups from the match.
   #   :: Int -> String -> Parser (NonEmpty String)
-  matchingN = n: assert n >= 0; regex: withOffsetInfo (ps:
-    let
-      str = elemAt ps 0;
-      offset = elemAt ps 1;
-      len = elemAt ps 2;
-      result = match ("(" + regex + ").*") (substring offset n str);
-    in if result == null
-      then {
-        context = "parsec.matchingN";
-        error = "expected text matching '${regex}'";
-      }
-      else let
-        matchText = elemAt result 0;
-        matchLen = stringLength matchText;
-      in [result (offset + matchLen) (len - matchLen)]);
+  matchingN = n: assert n >= 0; regex: withOffsetInfo (ps: let
+    str = elemAt ps 0;
+    offset = elemAt ps 1;
+    len = elemAt ps 2;
+    result = match ("(" + regex + ").*") (substring offset n str);
+  in
+    if result == null
+    then {
+      context = "parsec.matchingN";
+      error = "expected text matching '${regex}'";
+    }
+    else let
+      matchText = elemAt result 0;
+      matchLen = stringLength matchText;
+    in [result (offset + matchLen) (len - matchLen)]);
 
   # }}}
 }
-
 # vim: foldmethod=marker:
+

@@ -5,20 +5,20 @@
 #
 # nix-repl> parseParens "((())())"
 # { type = "success"; value = 3; }
-
 let
   nix-parsec = import ../../default.nix;
 in
+  with nix-parsec.parsec; let
+    max = x: y:
+      if x > y
+      then x
+      else y;
+    maximum = builtins.foldl' max 0;
 
-with nix-parsec.parsec;
-
-let
-  max = x: y: if x > y then x else y;
-  maximum = builtins.foldl' max 0;
-
-  parens =
-    let expr = fmap (x: x + 1) (between (string "(") (string ")") parens);
-    in fmap maximum (many expr);
-in {
-  parseParens = runParser (thenSkip parens eof);
-}
+    parens = let
+      expr = fmap (x: x + 1) (between (string "(") (string ")") parens);
+    in
+      fmap maximum (many expr);
+  in {
+    parseParens = runParser (thenSkip parens eof);
+  }

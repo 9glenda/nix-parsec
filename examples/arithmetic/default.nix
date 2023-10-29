@@ -7,29 +7,25 @@
 #
 # nix-repl> parseExpr "1 + 2 * -3"
 # { type = "success"; value = -5; }
-
 let
   nix-parsec = import ../../default.nix;
   inherit (nix-parsec) lexer;
 in
+  with nix-parsec.parsec; let
+    spaces = skipWhile (c: c == " ");
+    lexeme = lexer.lexeme spaces;
+    symbol = lexer.symbol spaces;
 
-with nix-parsec.parsec;
+    int = lexeme (lexer.signed spaces lexer.decimal);
 
-let
-  spaces = skipWhile (c: c == " ");
-  lexeme = lexer.lexeme spaces;
-  symbol = lexer.symbol spaces;
+    # Grammar:
+    #   expr   ::= term + expr | term - expr | term
+    #   term   ::= factor * term | factor / term | factor
+    #   factor ::= (expr) | int
 
-  int = lexeme (lexer.signed spaces lexer.decimal);
-
-  # Grammar:
-  #   expr   ::= term + expr | term - expr | term
-  #   term   ::= factor * term | factor / term | factor
-  #   factor ::= (expr) | int
-
-  expr = alt (bind term (n: skipThen (symbol "+") (fmap (m: n + m) expr))) term;
-  term = alt (bind factor (n: skipThen (symbol "*") (fmap (m: n * m) term))) factor;
-  factor = alt (between (symbol "(") (symbol ")") expr) int;
-in {
-  parseExpr = runParser (thenSkip expr eof);
-}
+    expr = alt (bind term (n: skipThen (symbol "+") (fmap (m: n + m) expr))) term;
+    term = alt (bind factor (n: skipThen (symbol "*") (fmap (m: n * m) term))) factor;
+    factor = alt (between (symbol "(") (symbol ")") expr) int;
+  in {
+    parseExpr = runParser (thenSkip expr eof);
+  }

@@ -123,7 +123,7 @@ in rec {
   # Given a way to consume the space after the sign, and given a parser that
   # parses a number, return a parser that can also handle a leading +/- sign.
   #   :: Num a => Parser () -> Parser a -> Parser a
-  signed = sp: parser:
+  signed = _sp: parser:
     let
       plus = fmap (_: 1) (string "+");
       minus = fmap (_: -1) (string "-");
